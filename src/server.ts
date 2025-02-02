@@ -23,18 +23,15 @@ interface ChatResponse {
   response: string;
 }
 
-// Get available models from Ollama
 app.get("/models", async (req: Request, res: Response): Promise<void> => {
   try {
     console.log("Fetching models from Ollama...");
 
-    // Fetch available models from Ollama
     const response = await fetch("http://127.0.0.1:11434/api/tags");
     if (!response.ok) {
       throw new Error(`Ollama API failed with status ${response.status}`);
     }
 
-    // Define the response structure explicitly
     interface OllamaModel {
       name: string;
     }
@@ -65,19 +62,20 @@ app.get("/models", async (req: Request, res: Response): Promise<void> => {
 });
 
 
-// Set AI model dynamically
 app.post("/set-model", (req: Request, res: Response): void => {
+  console.log("SETTING MODEL BACKEND");
   const { model }: { model: string } = req.body;
   if (!model) {
     res.status(400).json({ error: "No model provided" });
+    console.log("ERROR");
     return;
   }
 
   selectedModel = model;
   res.json({ success: true, model });
+  console.log(selectedModel);
 });
 
-// Handle AI chat requests
 app.use(express.json());
 
 app.post("/chat", async (req: Request, res: Response) => {
@@ -94,12 +92,12 @@ app.post("/chat", async (req: Request, res: Response) => {
     console.log("Sending request to Ollama...");
     const ollamaURL = "http://127.0.0.1:11434/api/generate";
 
-    console.log("Ollama request payload:", JSON.stringify({ model: "deepseek-r1:32b", prompt: message }));
+    console.log("Ollama request payload:", JSON.stringify({ model: selectedModel, prompt: message }));
 
     const ollamaResponse = await fetch(ollamaURL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "deepseek-r1:32b", prompt: message }),
+      body: JSON.stringify({ model: selectedModel, prompt: message }),
     });
 
     console.log("Ollama API response status:", ollamaResponse.status);
@@ -113,7 +111,7 @@ app.post("/chat", async (req: Request, res: Response) => {
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
 
-    // **Directly stream Ollama's response to the frontend**
+    // Directly stream Ollama's response to the frontend
     ollamaResponse.body.on("data", (chunk) => {
       const chunkText = chunk.toString();
       console.log("Received chunk:", chunkText);
@@ -145,7 +143,8 @@ app.post("/chat", async (req: Request, res: Response) => {
   }
 });
 
-// Start backend
+
+
 app.listen(PORT, () => {
   console.log(`Backend running at http:///127.0.0.1:${PORT}`);
 });

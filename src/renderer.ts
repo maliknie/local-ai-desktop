@@ -1,6 +1,6 @@
 const chatInput = document.getElementById("chat-input") as HTMLTextAreaElement;
 const chatOutput = document.getElementById("chat-output") as HTMLDivElement;
-const modelSelector = document.getElementById("model-selector") as HTMLSelectElement; // Get dropdown from HTML
+const modelSelector = document.getElementById("model-selector") as HTMLSelectElement;
 
 interface ModelResponse {
   models: string[];
@@ -16,7 +16,7 @@ async function fetchModels(): Promise<void> {
       return;
     }
 
-    modelSelector.innerHTML = ""; // Clear existing options
+    modelSelector.innerHTML = ""; 
 
     data.models.forEach((model) => {
       const option = document.createElement("option");
@@ -42,6 +42,7 @@ async function setModel(model: string): Promise<void> {
     });
   } catch (error) {
     console.error("Error setting model:", error);
+    console.log("Error contacting backend");
   }
 }
 
@@ -105,4 +106,8 @@ async function sendMessage() {
     }
   }
 
-fetchModels(); // Ensure models are fetched at the start
+function logSelectedModel() {
+
+}
+
+fetchModels();

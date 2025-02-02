@@ -9,7 +9,7 @@ function isGPUSupported(): boolean {
     const result = execSync("glxinfo | grep 'OpenGL renderer'").toString();
     return !result.includes("llvmpipe"); // `llvmpipe` means no real GPU acceleration
   } catch (error) {
-    return false; // If the command fails, assume no GPU
+    return false;
   }
 }
 
