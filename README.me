@@ -34,6 +34,11 @@ cd local-ai-desktop
 npm install
 ```
 
+### Build the files
+```bash
+npm run build
+```
+
 ### Start the Backend
 ```bash
 npm run backend
@@ -50,12 +55,16 @@ npm start
    ```bash
    ollama serve
    ```
-2. **Start the Electron app** and chat with the AI:
+2. **Build** the files:
+   ```bash
+   npm run build
+   ```
+3. **Start the Electron app** and chat with the AI:
    ```bash
    npm start
    ```
-3. **Select an AI model** from the dropdown (default: `deepseek-r1:32b`, you'll have to download the desired model via Ollama).
-4. **Send messages** and receive responses in real-time.
+4. **Select an AI model** from the dropdown (default: `deepseek-r1:32b`, you'll have to download the desired model via Ollama).
+5. **Send messages** and receive responses in real-time.
 
 
 ## API Endpoints
