@@ -1,9 +1,62 @@
 const chatInput = document.getElementById("chat-input") as HTMLTextAreaElement;
 const chatOutput = document.getElementById("chat-output") as HTMLDivElement;
 const modelSelector = document.getElementById("model-selector") as HTMLSelectElement;
+const stopButton = document.getElementById("stop-button") as HTMLButtonElement;
+
+const chatHistory: {role: string; content: string; images: string | null;}[] = [];
+
+const appState = {
+  selectedModel: "deepseek-r1:32b",
+  isGenerating: false,
+  abortController: new AbortController,
+
+  setModel(model: string) {
+      console.log(`Updating model: ${model}`);
+      this.selectedModel = model;
+  },
+
+  startGenerating() {
+      console.log("AI generation started...");
+      this.isGenerating = true;
+      this.abortController = new AbortController;
+  },
+
+  stopGenerating() {
+      console.log("AI generation stopped.");
+      this.isGenerating = false;
+      this.abortController.abort();
+  },
+
+  getAbortControllerSignal() {
+      return this.abortController.signal;
+  },
+
+  setIsGeneratingFalse() {
+      console.log("AI generation stopped.");
+      this.isGenerating = false;
+  },
+
+  getModel() {
+      return this.selectedModel;
+  },
+};
 
 interface ModelResponse {
   models: string[];
+}
+
+function stopGeneration() {
+  if (appState.isGenerating) {
+    appState.stopGenerating();
+    
+    fetch("http://127.0.0.1:3001/stop", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    })
+    .then(response => response.json())
+    .then(data => console.log("Stop request sent:", data))
+    .catch(error => console.error("Error stopping generation:", error));
+  }
 }
 
 async function fetchModels(): Promise<void> {
@@ -50,21 +103,95 @@ modelSelector.addEventListener("change", () => {
   setModel(modelSelector.value);
 });
 
-async function sendMessage() {
+function escapeHTML(text: string) {
+  return text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+async function sendMessageChat() {
+  appState.startGenerating();
+  const message = chatInput.value.trim();
+  const message_json = {"role": "user", "content": message, images: null};
+
+  chatOutput.innerHTML += `<p><strong>You:</strong> ${message}</p>`;
+  chatInput.value = "";
+
+  try {
+    chatHistory.push(message_json);
+    const response = await fetch ("http://127.0.0.1:3001/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chatHistory })
+    })
+
+    if (!response.ok || !response.body) {
+      appState.setIsGeneratingFalse();
+      throw new Error("Failed to fetch AI response.");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let aiResponse = "";
+    let aiMessageElement = document.createElement("p");
+    aiMessageElement.innerHTML = `<strong>AI:</strong> `;
+    chatOutput.appendChild(aiMessageElement);
+
+    async function readChunk() {
+      const { done, value } = await reader.read();
+      if (done) {
+        appState.setIsGeneratingFalse();
+        return;}
+
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split("\n");
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+
+        try {
+          const parsed = JSON.parse(line.replace(/^data: /, "").trim());
+          if (parsed.word) {
+            const safeWord = escapeHTML(parsed.word)
+            aiResponse += safeWord + " ";
+            aiMessageElement.innerHTML = `<strong>AI:</strong> ${aiResponse}`;
+          }
+
+          if (parsed.done) {
+            chatHistory.push({role: "assistant", content: parsed.completeResponse, images: null})
+          }
+        } catch (error) {
+          console.error("Error parsing chunk:", line);
+        }
+      }
+
+      readChunk();
+    }
+
+    readChunk();
+  } catch (error) {
+    console.error("Error:", error);
+    chatOutput.innerHTML += `<p><strong>AI:</strong> Error contacting AI</p>`;
+    appState.setIsGeneratingFalse();
+  }
+}
+
+async function sendMessageGeneration() {
+    appState.startGenerating();
     const message = chatInput.value.trim();
-    if (!message) return;
+    if (!message) {appState.setIsGeneratingFalse(); return;}
   
     chatOutput.innerHTML += `<p><strong>You:</strong> ${message}</p>`;
     chatInput.value = "";
   
     try {
-      const response = await fetch("http://localhost:3001/chat", {
+      const response = await fetch("http://localhost:3001/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
+        signal: appState.getAbortControllerSignal(),
       });
   
       if (!response.ok || !response.body) {
+        appState.setIsGeneratingFalse();
         throw new Error("Failed to fetch AI response.");
       }
   
@@ -77,7 +204,7 @@ async function sendMessage() {
   
       async function readChunk() {
         const { done, value } = await reader.read();
-        if (done) return;
+        if (done) {appState.setIsGeneratingFalse(); return;}
   
         const chunk = decoder.decode(value, { stream: true });
         const lines = chunk.split("\n");
@@ -103,11 +230,8 @@ async function sendMessage() {
     } catch (error) {
       console.error("Error:", error);
       chatOutput.innerHTML += `<p><strong>AI:</strong> Error contacting AI</p>`;
+      appState.setIsGeneratingFalse();
     }
   }
-
-function logSelectedModel() {
-
-}
 
 fetchModels();

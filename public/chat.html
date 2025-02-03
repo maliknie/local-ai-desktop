@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Local AI Desktop</h1>
+    <label for="model-selector">Choose AI Model:</label>
+    <select id="model-selector"></select>
+    <div id="chat-container">
+        <div id="chat-output"></div>
+        <textarea id="chat-input" rows="3" placeholder="Type a message..."></textarea>
+        <button onclick="sendMessageChat()">Send</button>
+        <button onclick="stopGeneration()">Stop Generation</button>
+    </div>
+    <script src="renderer.js"></script>
+</body>
+</html>

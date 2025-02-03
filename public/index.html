@@ -3,18 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Local AI Desktop</title>
+    <title>Welcome - Local AI Desktop</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Local AI Desktop</h1>
-    <label for="model-selector">Choose AI Model:</label>
-    <select id="model-selector"></select>
-    <div id="chat-container">
-        <div id="chat-output"></div>
-        <textarea id="chat-input" rows="3" placeholder="Type a message..."></textarea>
-        <button onclick="sendMessage()">Send</button>
+    <div id="welcome-container">
+        <h1>Welcome to Local AI Desktop</h1>
+        <p>Experience a fully local AI chat system.</p>
+        <button id="start-chat">Start Chat</button>
     </div>
-    <script src="renderer.js"></script>
+    <script>
+        document.getElementById("start-chat").addEventListener("click", () => {
+            window.location.href = "chat.html";
+        });
+    </script>
 </body>
 </html>

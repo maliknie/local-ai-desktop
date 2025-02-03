@@ -10,6 +10,7 @@ app.use(cors());
 app.use(bodyParser.json());
 
 let selectedModel = "deepseek-r1:32b";
+let currentAbortController: AbortController = new AbortController();
 
 interface ModelListResponse {
   models: { name: string }[];
@@ -79,7 +80,70 @@ app.post("/set-model", (req: Request, res: Response): void => {
 app.use(express.json());
 
 app.post("/chat", async (req: Request, res: Response) => {
-  console.log("Received chat request:", req.body);
+  console.log("Recieved chat request: ", req.body);
+  
+  const message = req.body.chatHistory;
+
+  try {
+    console.log("Sending request to Ollama...");
+    const ollamaURL =  "http://127.0.0.1:11434/api/chat";
+
+    const ollamaResponse = await fetch(ollamaURL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: selectedModel, messages: message }),
+    });
+
+    console.log("Ollama API response status:", ollamaResponse.status);
+
+    if (!ollamaResponse.ok || !ollamaResponse.body) {
+      throw new Error(`Ollama responded with status ${ollamaResponse.status}`);
+    }
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    // Stream Ollama's response to the frontend
+
+    let fullResponse = "";
+
+    ollamaResponse.body.on("data", (chunk) => {
+      const chunkText = chunk.toString();
+      console.log("Received chunk:", chunkText);
+
+      try {
+        const jsonData = JSON.parse(chunkText);
+        if (jsonData.message && jsonData.message.content) {
+          const word = jsonData.message.content;
+          fullResponse += word;
+
+          res.write(`data: ${JSON.stringify({ word })}\n\n`);
+        }
+      } catch (error) {
+        console.error("Error parsing JSON chunk:", chunkText);
+      }
+    });
+
+    ollamaResponse.body.on("end", () => {
+      console.log("Ollama response stream ended.");
+      res.write(`data: ${JSON.stringify({ done: true, completeResponse: fullResponse })}\n\n`);
+      res.end();
+    });
+
+    ollamaResponse.body.on("error", (err) => {
+      console.error("Error reading Ollama response:", err);
+      res.end();
+    });
+
+  } catch (error) {
+    console.error("Error fetching AI response:", error);
+    res.status(500).json({ error: "Failed to fetch AI response" });
+  }
+    
+});
+
+app.post("/generate", async (req: Request, res: Response) => {
+  console.log("Received generate request:", req.body);
 
   const { message } = req.body;
   if (!message) {
@@ -140,6 +204,27 @@ app.post("/chat", async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error fetching AI response:", error);
     res.status(500).json({ error: "Failed to fetch AI response" });
+  }
+});
+
+app.post("/stop", async (req: Request, res: Response) => {
+  console.log("Received stop request.");
+
+  try {
+    const response = await fetch("http://127.0.0.1:11434/api/kill", {
+      method: "POST",
+    });
+
+    if (response.ok) {
+      console.log("Ollama generation stopped successfully.");
+      res.json({ success: true, message: "Generation stopped." });
+    } else {
+      console.error("Failed to stop Ollama generation.");
+      res.status(500).json({ success: false, message: "Failed to stop generation." });
+    }
+  } catch (error) {
+    console.error("Error stopping Ollama:", error);
+    res.status(500).json({ success: false, message: "Error stopping Ollama." });
   }
 });
 
