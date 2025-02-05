@@ -25,6 +25,7 @@ interface ChatResponse {
 }
 
 app.get("/models", async (req: Request, res: Response): Promise<void> => {
+  console.log("TESTING");
   try {
     console.log("Fetching models from Ollama...");
 
@@ -103,11 +104,18 @@ app.post("/chat", async (req: Request, res: Response) => {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
-    // Stream Ollama's response to the frontend
 
     let fullResponse = "";
 
+    const abortHandler = () => {
+      console.log("Client disconnected, stopping stream.");
+      res.end();
+    };
+
+    req.on("close", abortHandler);
+
     ollamaResponse.body.on("data", (chunk) => {
+      if (res.writableEnded) return;
       const chunkText = chunk.toString();
       console.log("Received chunk:", chunkText);
 
@@ -126,76 +134,12 @@ app.post("/chat", async (req: Request, res: Response) => {
 
     ollamaResponse.body.on("end", () => {
       console.log("Ollama response stream ended.");
-      res.write(`data: ${JSON.stringify({ done: true, completeResponse: fullResponse })}\n\n`);
-      res.end();
-    });
-
-    ollamaResponse.body.on("error", (err) => {
-      console.error("Error reading Ollama response:", err);
-      res.end();
-    });
-
-  } catch (error) {
-    console.error("Error fetching AI response:", error);
-    res.status(500).json({ error: "Failed to fetch AI response" });
-  }
-    
-});
-
-app.post("/generate", async (req: Request, res: Response) => {
-  console.log("Received generate request:", req.body);
-
-  const { message } = req.body;
-  if (!message) {
-    console.error("No message provided");
-    res.status(400).json({ error: "No message provided" });
-    return;
-  }
-
-  try {
-    console.log("Sending request to Ollama...");
-    const ollamaURL = "http://127.0.0.1:11434/api/generate";
-
-    console.log("Ollama request payload:", JSON.stringify({ model: selectedModel, prompt: message }));
-
-    const ollamaResponse = await fetch(ollamaURL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: selectedModel, prompt: message }),
-    });
-
-    console.log("Ollama API response status:", ollamaResponse.status);
-
-    if (!ollamaResponse.ok || !ollamaResponse.body) {
-      throw new Error(`Ollama responded with status ${ollamaResponse.status}`);
-    }
-
-    // Set up response headers for streaming
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-
-    // Directly stream Ollama's response to the frontend
-    ollamaResponse.body.on("data", (chunk) => {
-      const chunkText = chunk.toString();
-      console.log("Received chunk:", chunkText);
-
-      try {
-        const jsonData = JSON.parse(chunkText);
-        if (jsonData.response) {
-          res.write(`data: ${JSON.stringify({ word: jsonData.response })}\n\n`);
-        }
-      } catch (error) {
-        console.error("Error parsing JSON chunk:", chunkText);
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ done: true, completeResponse: fullResponse })}\n\n`);
+        res.end();
       }
     });
 
-    ollamaResponse.body.on("end", () => {
-      console.log("Ollama response stream ended.");
-      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-      res.end();
-    });
-
     ollamaResponse.body.on("error", (err) => {
       console.error("Error reading Ollama response:", err);
       res.end();
@@ -204,32 +148,23 @@ app.post("/generate", async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error fetching AI response:", error);
     res.status(500).json({ error: "Failed to fetch AI response" });
-  }
+  }    
 });
 
 app.post("/stop", async (req: Request, res: Response) => {
   console.log("Received stop request.");
 
-  try {
-    const response = await fetch("http://127.0.0.1:11434/api/kill", {
-      method: "POST",
-    });
-
-    if (response.ok) {
-      console.log("Ollama generation stopped successfully.");
-      res.json({ success: true, message: "Generation stopped." });
-    } else {
-      console.error("Failed to stop Ollama generation.");
-      res.status(500).json({ success: false, message: "Failed to stop generation." });
-    }
-  } catch (error) {
-    console.error("Error stopping Ollama:", error);
-    res.status(500).json({ success: false, message: "Error stopping Ollama." });
+  if (currentAbortController) {
+    currentAbortController.abort();
+    currentAbortController = new AbortController();
+    res.json({ success: true, message: "Generation stopped." });
+  } else {
+    res.json({ success: false, message: "No active generation." });
   }
 });
-
-
 
 app.listen(PORT, () => {
   console.log(`Backend running at http:///127.0.0.1:${PORT}`);
 });
+
+console.log("LOL");

@@ -2,6 +2,19 @@ const chatInput = document.getElementById("chat-input") as HTMLTextAreaElement;
 const chatOutput = document.getElementById("chat-output") as HTMLDivElement;
 const modelSelector = document.getElementById("model-selector") as HTMLSelectElement;
 const stopButton = document.getElementById("stop-button") as HTMLButtonElement;
+const openTerminalButton = document.getElementById("open-terminal-btn") as HTMLButtonElement;
+const homeButton = document.getElementById("home");
+const { ipcRenderer } = require("electron");
+
+if (openTerminalButton) {
+  openTerminalButton.addEventListener("click", () => {
+      ipcRenderer.send("open-terminal");
+  });
+}
+
+homeButton?.addEventListener("click", () => {
+  window.location.href= "index.html";
+});
 
 const chatHistory: {role: string; content: string; images: string | null;}[] = [];
 
@@ -24,7 +37,7 @@ const appState = {
   stopGenerating() {
       console.log("AI generation stopped.");
       this.isGenerating = false;
-      this.abortController.abort();
+      try {this.abortController.abort();} catch {}
   },
 
   getAbortControllerSignal() {
@@ -60,6 +73,7 @@ function stopGeneration() {
 }
 
 async function fetchModels(): Promise<void> {
+  console.log("Fetching models...")
   try {
     const response = await fetch("http://localhost:3001/models");
     const data: ModelResponse = await response.json();
@@ -79,7 +93,7 @@ async function fetchModels(): Promise<void> {
     });
 
     console.log("Dropdown populated with models:", data.models);
-    if (data.models.length > 0) setModel(data.models[0]); // Select first model by default
+    if (data.models.length > 0) setModel(data.models[0]);
   } catch (error) {
     console.error("Error fetching models:", error);
   }
@@ -120,7 +134,8 @@ async function sendMessageChat() {
     const response = await fetch ("http://127.0.0.1:3001/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chatHistory })
+      body: JSON.stringify({ chatHistory }),
+      signal: appState.getAbortControllerSignal()
     })
 
     if (!response.ok || !response.body) {
@@ -150,13 +165,14 @@ async function sendMessageChat() {
         try {
           const parsed = JSON.parse(line.replace(/^data: /, "").trim());
           if (parsed.word) {
-            const safeWord = escapeHTML(parsed.word)
-            aiResponse += safeWord + " ";
+            const safeWord = escapeHTML(parsed.word);
+            aiResponse += safeWord + "";
             aiMessageElement.innerHTML = `<strong>AI:</strong> ${aiResponse}`;
           }
 
           if (parsed.done) {
-            chatHistory.push({role: "assistant", content: parsed.completeResponse, images: null})
+            appState.setIsGeneratingFalse();
+            chatHistory.push({role: "assistant", content: parsed.completeResponse, images: null});
           }
         } catch (error) {
           console.error("Error parsing chunk:", line);
@@ -167,71 +183,16 @@ async function sendMessageChat() {
     }
 
     readChunk();
-  } catch (error) {
-    console.error("Error:", error);
-    chatOutput.innerHTML += `<p><strong>AI:</strong> Error contacting AI</p>`;
+  } catch (error: any) {
+    if (error.name === "AbortError") {
+      console.warn("Fetch request aborted. Cleaning up...");
+      return;
+    } else {
+      console.error("Error:", error);
+      chatOutput.innerHTML += `<p><strong>AI:</strong> Error contacting AI</p>`;
+    }
     appState.setIsGeneratingFalse();
   }
 }
-
-async function sendMessageGeneration() {
-    appState.startGenerating();
-    const message = chatInput.value.trim();
-    if (!message) {appState.setIsGeneratingFalse(); return;}
-  
-    chatOutput.innerHTML += `<p><strong>You:</strong> ${message}</p>`;
-    chatInput.value = "";
-  
-    try {
-      const response = await fetch("http://localhost:3001/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
-        signal: appState.getAbortControllerSignal(),
-      });
-  
-      if (!response.ok || !response.body) {
-        appState.setIsGeneratingFalse();
-        throw new Error("Failed to fetch AI response.");
-      }
-  
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let aiResponse = "";
-      let aiMessageElement = document.createElement("p");
-      aiMessageElement.innerHTML = `<strong>AI:</strong> `;
-      chatOutput.appendChild(aiMessageElement);
-  
-      async function readChunk() {
-        const { done, value } = await reader.read();
-        if (done) {appState.setIsGeneratingFalse(); return;}
-  
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
-  
-        for (const line of lines) {
-          if (!line.trim()) continue;
-  
-          try {
-            const parsed = JSON.parse(line.replace(/^data: /, "").trim());
-            if (parsed.word) {
-              aiResponse += parsed.word + " ";
-              aiMessageElement.innerHTML = `<strong>AI:</strong> ${aiResponse}`;
-            }
-          } catch (error) {
-            console.error("Error parsing chunk:", line);
-          }
-        }
-  
-        readChunk();
-      }
-  
-      readChunk();
-    } catch (error) {
-      console.error("Error:", error);
-      chatOutput.innerHTML += `<p><strong>AI:</strong> Error contacting AI</p>`;
-      appState.setIsGeneratingFalse();
-    }
-  }
 
 fetchModels();

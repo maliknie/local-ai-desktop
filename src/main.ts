@@ -1,6 +1,6 @@
-import { app, BrowserWindow, dialog } from "electron";
+import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import path from "path";
-import { execSync } from "child_process";
+import { execSync, spawn } from "child_process";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -41,4 +41,30 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
+});
+
+function openTerminal() {
+  const platform = process.platform;
+  let terminalCommand;
+
+  if (platform === "win32") {
+    terminalCommand = "cmd.exe";
+  } else if (platform === "darwin") {
+    terminalCommand = "open -a Terminal";
+  } else {
+    terminalCommand = "x-terminal-emulator || gnome-terminal || konsole || xfce4-terminal || lxterminal || xterm";
+  }
+
+  try {
+    spawn(terminalCommand, { shell: true, detached: true, stdio: "ignore" });
+    mainWindow?.webContents.send("terminal-response", "Terminal Opened!");
+  } catch (error) {
+    console.error("Error opening terminal:", error);
+    mainWindow?.webContents.send("terminal-response", "Failed to open terminal.");
+  }
+}
+
+ipcMain.on("open-terminal", () => {
+  console.log("✅ Received request to open terminal");
+  openTerminal();
 });

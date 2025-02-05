@@ -11,11 +11,17 @@
         <h1>Welcome to Local AI Desktop</h1>
         <p>Experience a fully local AI chat system.</p>
         <button id="start-chat">Start Chat</button>
+        <button id="start-download-models">Download Models From Ollama</button>
+        <button id="open-terminal-btn">Open Terminal</button>
     </div>
     <script>
         document.getElementById("start-chat").addEventListener("click", () => {
             window.location.href = "chat.html";
         });
+        document.getElementById("start-download-models").addEventListener("click", () => {
+            window.open("https://ollama.com/search", "_blank");
+        });
     </script>
+    <script src="renderer.js"></script>
 </body>
 </html>
